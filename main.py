@@ -17,6 +17,7 @@ PAYLOAD = {"caller_id": "4d147a386f0331003b3c498f5d3ee437",
            "category": "software"}
 
 
+# Insert the data into the instance
 def insert_into_now(instance, payload):
     try:
         response = requests.post(instance, auth=(USER, PWD), headers=HEADERS, data=json.dumps(payload))
@@ -28,7 +29,7 @@ def insert_into_now(instance, payload):
     print(data)
 
 
-# Insert the data into the instance
+# Build the payloads for incident & CSM
 def populate_data(search_query):
     bugs = get_bugs()
     news = get_news(search_query)
