@@ -14,7 +14,8 @@ HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
 PAYLOAD = {"caller_id": "4d147a386f0331003b3c498f5d3ee437",
            "short_description": '',
            "assignment_group": "8a4dde73c6112278017a6a4baf547aa7",
-           "category": "software"}
+           "category": "software",
+           "description": "scraped from web0"}
 
 
 # Insert the data into the instance
