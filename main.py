@@ -37,7 +37,7 @@ def populate_data(search_query):
 
     for bug in bugs:
         PAYLOAD['short_description'] = bug
-        insert_into_now(CASE_API, PAYLOAD)
+        insert_into_now(INCIDENT_API, PAYLOAD)
 
     for headline in news:
         # Modify payload for CSM
@@ -47,7 +47,7 @@ def populate_data(search_query):
         PAYLOAD['short_description'] = headline
         PAYLOAD['contact'] = '4d147a386f0331003b3c498f5d3ee437'
         PAYLOAD['assignment_group'] = 'c1431057db9af700a1f3dd18f49619f1'
-        insert_into_now(INCIDENT_API, PAYLOAD)
+        insert_into_now(CASE_API, PAYLOAD)
 
 
 if __name__ == '__main__':
