@@ -1,4 +1,4 @@
-from scape_bugs import get_bugs
+from scrape_bugs import get_bugs
 from scrape_news import get_news
 import requests
 import config
