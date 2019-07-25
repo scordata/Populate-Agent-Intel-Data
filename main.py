@@ -1,54 +1,107 @@
-from scape_bugs import get_bugs
-from scrape_news import get_news
+from bs4 import BeautifulSoup as soup
+from urllib.request import urlopen
+import bs4 as bs
+import urllib.request
+import re
 import requests
-import config
 import json
 import sys
-
-# Config
-USER = config.INSTANCE_CONFIG['username']
-PWD = config.INSTANCE_CONFIG['password']
-INCIDENT_API = "https://" + config.INSTANCE_CONFIG['instance'] + ".service-now.com/api/now/table/incident"
-CASE_API = "https://" + config.INSTANCE_CONFIG['instance'] + ".service-now.com/api/now/table/sn_customerservice_case"
-HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
-PAYLOAD = {"caller_id": "4d147a386f0331003b3c498f5d3ee437",
-           "short_description": '',
-           "assignment_group": "8a4dde73c6112278017a6a4baf547aa7",
-           "category": "software",
-           "description": "scraped from web0"}
+import configparser
 
 
-# Insert the data into the instance
-def insert_into_now(instance, payload):
-    try:
-        response = requests.post(instance, auth=(USER, PWD), headers=HEADERS, data=json.dumps(payload))
-        response.raise_for_status()
-    except requests.exceptions.HTTPError as err:
-        print(err)
-        sys.exit(1)
-    data = response.json()
-    print(data)
+class Scraper:
 
+    def __init__(self, config_path):
+        # Config
+        config = configparser.ConfigParser()
+        config.read(config_path)
+        self.USER = config['username']
+        self.PWD = config['password']
+        self.INCIDENT_API = "https://" + config['instance'] \
+                            + ".service-now.com/api/now/table/incident"
+        self.CASE_API = "https://" + config['instance'] \
+                    + ".service-now.com/api/now/table/sn_customerservice_case"
+        self.HEADERS = {"Content-Type": "application/json",
+                        "Accept": "application/json"}
+        self.PAYLOAD = {"caller_id": "4d147a386f0331003b3c498f5d3ee437",
+                        "short_description": '',
+                        "assignment_group": "8a4dde73c6112278017a6a4baf547aa7",
+                        "category": "software",
+                        "description": "scraped from web0"}
 
-# Build the payloads for incident & CSM
-def populate_data(search_query):
-    bugs = get_bugs()
-    news = get_news(search_query)
+    @staticmethod
+    def _get_news(search_query):
+        # Add + to make a valid google query
+        google_query = search_query.replace(' ', '+')
+        news_url = "https://news.google.com/rss/search?q=" + \
+                   google_query + "&as_qdr=y2&hl=en-US&gl=US&ceid=US:en"
+        client = urlopen(news_url)
+        xml_page = client.read()
+        client.close()
+        soup_page = soup(xml_page, "xml")
+        news_list = soup_page.findAll("item")
+        headlines = []
+        for news in news_list:
+            headlines.append(news.title.text)
 
-    for bug in bugs:
-        PAYLOAD['short_description'] = bug
-        insert_into_now(INCIDENT_API, PAYLOAD)
+        return headlines
 
-    for headline in news:
-        # Modify payload for CSM
-        if 'caller_id' in PAYLOAD:
-            PAYLOAD.pop('caller_id')
-            PAYLOAD.pop('category')
-        PAYLOAD['short_description'] = headline
-        PAYLOAD['contact'] = '4d147a386f0331003b3c498f5d3ee437'
-        PAYLOAD['assignment_group'] = 'c1431057db9af700a1f3dd18f49619f1'
-        insert_into_now(CASE_API, PAYLOAD)
+    @staticmethod
+    def _get_bugs():
+        bugs_url = \
+            "https://bz.apache.org/bugzilla/buglist.cgi?quicksearch=error"
+        source = urllib.request.urlopen(bugs_url).read()
+        soup = bs.BeautifulSoup(source, 'lxml')
+        bugs = soup.find_all('td', class_='bz_short_desc_column')
+        bug_descriptions = []
+        for bug in bugs:
+            # Gross regex because I don't know how beautifulsoup works
+            match_object = re.match(
+                r"\[<a href=\"show_bug.cgi\?id=.*\">(.*).*</a>\]",
+                str(bug.find_all('a')))
+            bug_descriptions.append(match_object.group(1).strip())
+
+        return bug_descriptions
+
+    # Insert the data into the instance
+    def insert_into_now(self, instance, payload):
+        try:
+            response = requests.post(instance, 
+                                     auth=(self.USER, self.PWD),
+                                     headers=self.HEADERS, 
+                                     data=json.dumps(payload))
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as err:
+            print(err)
+            sys.exit(1)
+        data = response.json()
+        print(data)
+
+    # Build the payloads for incident & CSM
+    def populate_data(self, search_query):
+        bugs = self._get_bugs()
+        news = self._get_news(search_query)
+
+        for bug in bugs:
+            # wtf?
+            self.PAYLOAD['short_description'] = bug
+            self.insert_into_now(self.INCIDENT_API, self.PAYLOAD)
+
+        for headline in news:
+            # Modify payload for CSM
+            if 'caller_id' in self.PAYLOAD:
+                self.PAYLOAD.pop('caller_id')
+                self.PAYLOAD.pop('category')
+                self.PAYLOAD['short_description'] = headline
+                self.PAYLOAD['contact'] = '4d147a386f0331003b3c498f5d3ee437'
+                self.PAYLOAD['assignment_group'] = \
+                    'c1431057db9af700a1f3dd18f49619f1'
+            self.insert_into_now(self.CASE_API, self.PAYLOAD)
 
 
 if __name__ == '__main__':
-    populate_data(sys.argv[1])
+    # TODO: Implement parser
+    query = sys.argv[1]
+    # TODO: Pass config as param?
+    scraper = Scraper('config.ini')
+    scraper.populate_data(query)
